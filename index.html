@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRM — Clínica Dra. Letícia Toledo</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb; --page: #f9f9f7;
+    --ink-1: #0b0b0b; --ink-2: #52514e; --ink-muted: #898781;
+    --grid: #e1e0d9; --baseline: #c3c2b7; --border: rgba(11,11,11,0.10);
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+    --st-warn: #fab219; --st-critical: #d03b3b; --good-text: #006300;
+    --card-shadow: 0 1px 3px rgba(11,11,11,0.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface-1: #1a1a19; --page: #0d0d0d;
+      --ink-1: #ffffff; --ink-2: #c3c2b7; --ink-muted: #898781;
+      --grid: #2c2c2a; --baseline: #383835; --border: rgba(255,255,255,0.10);
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+      --good-text: #0ca30c; --card-shadow: none;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page); color: var(--ink-1); font-size: 14px; line-height: 1.45; }
+  /* Login */
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .login {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px; width: min(360px, 92vw);
+  }
+  .login h1 { font-size: 18px; margin-bottom: 2px; }
+  .login .sub { font-size: 12.5px; color: var(--ink-2); margin-bottom: 18px; }
+  .login label { display: block; font-size: 12px; color: var(--ink-2); margin: 10px 0 4px; }
+  .login input { width: 100%; font: inherit; padding: 9px 11px; border: 1px solid var(--baseline); border-radius: 8px; background: var(--page); color: var(--ink-1); }
+  .login button { width: 100%; margin-top: 16px; }
+  .login .err { color: var(--st-critical); font-size: 12.5px; margin-top: 10px; min-height: 17px; }
+  header.top { padding: 14px 20px 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  header.top h1 { font-size: 17px; font-weight: 700; }
+  header.top .spacer { flex: 1; }
+  header.top .who { font-size: 11.5px; color: var(--ink-muted); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; padding: 12px 20px 2px; }
+  .kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .kpi .lbl { font-size: 11px; color: var(--ink-2); }
+  .kpi .val { font-size: 23px; font-weight: 700; margin-top: 1px; }
+  .kpi .sub { font-size: 11px; color: var(--ink-muted); }
+  .kpi .sub .up { color: var(--good-text); font-weight: 600; }
+  .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 20px; }
+  .filters select, .filters input { font: inherit; color: var(--ink-1); background: var(--surface-1); border: 1px solid var(--baseline); border-radius: 8px; padding: 6px 10px; }
+  .filters input { min-width: 170px; }
+  .filters .spacer { flex: 1; }
+  button.btn { font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px; padding: 7px 14px; border: 1px solid var(--baseline); background: var(--surface-1); color: var(--ink-1); }
+  button.btn.primary { background: var(--s1); border-color: var(--s1); color: #fff; }
+  button.btn.ghost { border-color: transparent; color: var(--ink-2); }
+  button.danger { border-color: var(--st-critical); color: var(--st-critical); background: var(--surface-1); }
+  .board { display: flex; gap: 10px; padding: 4px 20px 24px; overflow-x: auto; align-items: flex-start; }
+  .col { min-width: 240px; width: 240px; flex-shrink: 0; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 9px; }
+  .col.dragover { outline: 2px dashed var(--s1); outline-offset: -2px; }
+  .col header { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 4px 7px; border-bottom: 1px solid var(--grid); margin-bottom: 7px; }
+  .col header .t { font-size: 12px; font-weight: 700; }
+  .col header .n { font-size: 11px; color: var(--ink-muted); }
+  .col .total { font-size: 11px; color: var(--ink-2); padding: 0 4px 6px; }
+  .cards { display: flex; flex-direction: column; gap: 7px; min-height: 26px; }
+  .card { background: var(--page); border: 1px solid var(--border); border-radius: 10px; padding: 9px 10px; cursor: grab; box-shadow: var(--card-shadow); }
+  .card .nm { font-weight: 650; font-size: 13px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .card .nm .star { font-size: 10.5px; color: var(--ink-2); border: 1px solid var(--baseline); border-radius: 5px; padding: 0 4px; }
+  .card .meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .chip { font-size: 10px; color: var(--ink-2); border: 1px solid var(--grid); border-radius: 999px; padding: 1px 7px; display: inline-flex; align-items: center; gap: 4px; background: var(--surface-1); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .card .row { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; font-size: 10.5px; color: var(--ink-muted); gap: 6px; flex-wrap: wrap; }
+  .alert { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; border-radius: 6px; padding: 2px 6px; }
+  .alert.warn { color: #7a4a00; background: color-mix(in srgb, var(--st-warn) 22%, var(--surface-1)); }
+  .alert.crit { color: #fff; background: var(--st-critical); }
+  .next { font-size: 10.5px; margin-top: 6px; color: var(--ink-2); }
+  .next.overdue, .next.missing { color: var(--st-critical); font-weight: 650; }
+  dialog { border: 1px solid var(--border); border-radius: 14px; padding: 0; background: var(--surface-1); color: var(--ink-1); width: min(560px, 94vw); max-height: 88vh; }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  .m-head { padding: 15px 20px 10px; border-bottom: 1px solid var(--grid); display: flex; justify-content: space-between; align-items: flex-start; }
+  .m-head h2 { font-size: 16px; }
+  .m-head .ph { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .m-body { padding: 13px 20px; overflow-y: auto; max-height: 55vh; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 480px) { .fields { grid-template-columns: 1fr; } }
+  .fields label { font-size: 11px; color: var(--ink-2); display: block; margin-bottom: 3px; }
+  .fields select, .fields input { width: 100%; font: inherit; font-size: 13px; color: var(--ink-1); background: var(--page); border: 1px solid var(--baseline); border-radius: 7px; padding: 6px 8px; }
+  .tl-title { font-size: 11.5px; font-weight: 700; margin: 15px 0 7px; color: var(--ink-2); }
+  .tl { display: flex; flex-direction: column; gap: 6px; }
+  .msg { max-width: 84%; padding: 7px 10px; border-radius: 11px; font-size: 12.5px; }
+  .msg.in { align-self: flex-start; background: var(--page); border: 1px solid var(--grid); }
+  .msg.out { align-self: flex-end; background: color-mix(in srgb, var(--s3) 14%, var(--surface-1)); border: 1px solid var(--grid); }
+  .msg .when { display: block; font-size: 10px; color: var(--ink-muted); margin-top: 2px; }
+  .m-foot { padding: 11px 20px 15px; border-top: 1px solid var(--grid); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink-1); color: var(--page); border-radius: 10px; padding: 9px 16px; font-size: 13px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 99; }
+  .toast.show { opacity: .94; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="viewLogin">
+  <form class="login" id="formLogin">
+    <h1>CRM — Clínica Dra. Letícia Toledo</h1>
+    <div class="sub">Acesso restrito à equipe</div>
+    <label>E-mail</label>
+    <input type="email" id="inEmail" autocomplete="username" required>
+    <label>Senha</label>
+    <input type="password" id="inSenha" autocomplete="current-password" required>
+    <button class="btn primary" type="submit">Entrar</button>
+    <div class="err" id="loginErr"></div>
+  </form>
+</div>
+
+<!-- APP -->
+<div id="viewApp" class="hidden">
+  <header class="top">
+    <h1>CRM — Clínica Dra. Letícia Toledo</h1>
+    <div class="spacer"></div>
+    <span class="who" id="who"></span>
+    <button class="btn ghost" id="btnSair">sair</button>
+  </header>
+  <div class="kpis" id="kpis"></div>
+  <div class="filters">
+    <select id="fUnidade">
+      <option value="">Todas as unidades</option>
+      <option>Lençóis Paulista</option><option>Macatuba</option><option>Barra Bonita</option>
+    </select>
+    <select id="fPotencial">
+      <option value="">Todo potencial</option>
+      <option value="alto">Alto (R$ 3.000+)</option><option value="medio">Médio</option><option value="pontual">Pontual</option>
+    </select>
+    <input id="fBusca" type="search" placeholder="Buscar nome ou telefone…">
+    <div class="spacer"></div>
+    <button class="btn primary" id="btnNovo">＋ Novo lead</button>
+  </div>
+  <div class="board" id="board"></div>
+</div>
+
+<!-- Modal do card -->
+<dialog id="dlg">
+  <div class="m-head">
+    <div><h2 id="dNome"></h2><div class="ph" id="dFone"></div></div>
+    <button class="btn ghost" onclick="document.getElementById('dlg').close()">✕</button>
+  </div>
+  <div class="m-body">
+    <div class="fields">
+      <div><label>Nome</label><input id="dNomeIn"></div>
+      <div><label>Telefone (WhatsApp)</label><input id="dFoneIn" placeholder="(14) 9xxxx-xxxx"></div>
+      <div><label>Unidade</label>
+        <select id="dUnidade"><option value="">—</option><option>Lençóis Paulista</option><option>Macatuba</option><option>Barra Bonita</option></select></div>
+      <div><label>Interesse</label>
+        <select id="dInteresse"><option value="">—</option><option>colágeno</option><option>full face</option><option>toxina</option><option>preenchimento</option><option>pele</option><option>outro</option></select></div>
+      <div><label>Origem</label>
+        <select id="dOrigem"><option value="">—</option><option>Instagram</option><option>anúncio</option><option>indicação</option><option>passou na porta</option><option>outro</option></select></div>
+      <div><label>Potencial</label>
+        <select id="dPotencial"><option value="">—</option><option value="alto">alto (R$ 3.000+)</option><option value="medio">médio</option><option value="pontual">pontual</option></select></div>
+      <div><label>Próxima ação</label><input id="dAcao" placeholder="ex.: enviar horários da semana"></div>
+      <div><label>Data da próxima ação</label><input id="dAcaoData" type="date"></div>
+    </div>
+    <div id="dTlWrap">
+      <div class="tl-title">CONVERSA</div>
+      <div class="tl" id="dTimeline"></div>
+    </div>
+  </div>
+  <div class="m-foot">
+    <button class="btn danger" id="dPerder">Marcar como perdido…</button>
+    <button class="btn" id="dRespondi" title="Zera o alerta de tempo de resposta">✓ Já respondi no WhatsApp</button>
+    <button class="btn primary" id="dSalvar">Salvar</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://ryfgborvioeaosxsmuny.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_8mYw5dXj6A2Amh5pTA4k_g_NNTIEWjE';
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = id => document.getElementById(id);
+const STAGES = [
+  { id: 'novo', nome: 'Novo lead' }, { id: 'qual', nome: 'Em qualificação' },
+  { id: 'oferta', nome: 'Avaliação oferecida' }, { id: 'agend', nome: 'Agendado' },
+  { id: 'prop', nome: 'Compareceu — proposta' }, { id: 'fechado', nome: 'Fechado ✅' },
+  { id: 'recup', nome: 'Recuperação' },
+];
+const UNID_COR = { 'Lençóis Paulista': 'var(--s1)', 'Macatuba': 'var(--s2)', 'Barra Bonita': 'var(--s3)' };
+let leads = [];
+let openId = null;
+let channel = null;
+
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2400); }
+
+// ── Auth ──────────────────────────────────────────────────────────
+$('formLogin').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('loginErr').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email: $('inEmail').value.trim(), password: $('inSenha').value });
+  if (error) { $('loginErr').textContent = 'E-mail ou senha incorretos.'; return; }
+});
+$('btnSair').addEventListener('click', () => sb.auth.signOut());
+sb.auth.onAuthStateChange((_ev, session) => {
+  if (session) { $('viewLogin').classList.add('hidden'); $('viewApp').classList.remove('hidden'); $('who').textContent = session.user.email; start(); }
+  else { $('viewApp').classList.add('hidden'); $('viewLogin').classList.remove('hidden'); if (channel) { sb.removeChannel(channel); channel = null; } }
+});
+
+// ── Dados ─────────────────────────────────────────────────────────
+async function carregar() {
+  const { data, error } = await sb.from('leads').select('*').eq('arquivado', false).order('criado_em', { ascending: false });
+  if (error) { toast('Erro ao carregar: ' + error.message); return; }
+  leads = data; render();
+}
+function start() {
+  carregar();
+  if (!channel) {
+    channel = sb.channel('leads-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, carregar)
+      .subscribe();
+  }
+  setInterval(render, 60000); // reavalia alertas a cada minuto
+}
+
+// ── Alertas ───────────────────────────────────────────────────────
+function alerta(l) {
+  if (!l.aguardando_resposta || !['novo','qual'].includes(l.etapa) || !l.ultima_msg_lead_at) return null;
+  const m = Math.round((Date.now() - new Date(l.ultima_msg_lead_at).getTime()) / 60000);
+  if (m >= 60) return { cls: 'crit', txt: '⚠ sem resposta há ' + (m >= 120 ? Math.round(m/60) + ' h' : m + ' min') };
+  if (m >= 15) return { cls: 'warn', txt: '⏱ sem resposta há ' + m + ' min' };
+  return null;
+}
+
+// ── Render ────────────────────────────────────────────────────────
+function passaFiltro(l) {
+  const u = $('fUnidade').value, p = $('fPotencial').value, q = $('fBusca').value.trim().toLowerCase();
+  if (u && l.unidade !== u) return false;
+  if (p && l.potencial !== p) return false;
+  if (q && !((l.nome||'').toLowerCase().includes(q) || (l.telefone||'').includes(q))) return false;
+  return true;
+}
+function brl(cents) { return 'R$ ' + (cents/100).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 2}); }
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function cardHTML(l) {
+  const a = alerta(l);
+  const pot = l.potencial === 'alto' ? '<span class="star">★ alto</span>' : '';
+  let next = '';
+  if (l.etapa !== 'fechado') {
+    if (!l.proxima_acao) next = '<div class="next missing">⚠ sem próxima ação</div>';
+    else {
+      const overdue = l.proxima_acao_em && new Date(l.proxima_acao_em + 'T23:59:59') < new Date(Date.now() - 86400000);
+      next = `<div class="next ${overdue ? 'overdue' : ''}">${overdue ? '⚠ atrasada: ' : '→ '}${esc(l.proxima_acao)}</div>`;
+    }
+  }
+  return `<div class="card" draggable="true" data-id="${l.id}">
+    <div class="nm">${esc(l.nome)} ${pot}</div>
+    <div class="meta">
+      ${l.unidade ? `<span class="chip"><span class="dot" style="background:${UNID_COR[l.unidade]}"></span>${esc(l.unidade.split(' ')[0])}</span>` : ''}
+      ${l.interesse ? `<span class="chip">${esc(l.interesse)}</span>` : ''}
+      ${l.origem ? `<span class="chip">${esc(l.origem)}</span>` : ''}
+    </div>
+    <div class="row"><span>${esc(l.telefone)}</span>${a ? `<span class="alert ${a.cls}">${a.txt}</span>` : ''}</div>
+    ${l.valor_cents ? `<div class="next">${brl(l.valor_cents)}</div>` : ''}
+    ${next}
+  </div>`;
+}
+function render() {
+  const abertos = leads.filter(l => l.etapa !== 'fechado');
+  const altos = abertos.filter(l => l.potencial === 'alto').length;
+  const alertas = leads.filter(l => alerta(l)).length;
+  const fech = leads.filter(l => l.etapa === 'fechado');
+  const receita = fech.reduce((s, l) => s + l.valor_cents, 0);
+  $('kpis').innerHTML = [
+    { lbl: 'Leads ativos no funil', val: abertos.length, sub: altos + ' de potencial alto' },
+    { lbl: 'Aguardando resposta', val: alertas, sub: alertas ? 'ação necessária agora' : 'tudo respondido ✓' },
+    { lbl: 'Agendados', val: leads.filter(l => l.etapa === 'agend').length, sub: 'avaliações marcadas' },
+    { lbl: 'Em recuperação', val: leads.filter(l => l.etapa === 'recup').length, sub: 'para reengajar' },
+    { lbl: 'Fechado (total)', val: brl(receita), sub: fech.length + ' plano(s)' },
+  ].map(k => `<div class="kpi"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
+
+  $('board').innerHTML = STAGES.map(s => {
+    const ls = leads.filter(l => l.etapa === s.id && passaFiltro(l));
+    const total = ls.reduce((sum, l) => sum + l.valor_cents, 0);
+    return `<div class="col" data-stage="${s.id}">
+      <header><span class="t">${s.nome}</span><span class="n">${ls.length}</span></header>
+      ${total ? `<div class="total">${brl(total)}</div>` : ''}
+      <div class="cards">${ls.map(cardHTML).join('')}</div>
+    </div>`;
+  }).join('');
+  bindDnD(); bindCards();
+}
+
+// ── Drag & drop ───────────────────────────────────────────────────
+let dragId = null;
+function bindDnD() {
+  document.querySelectorAll('.card').forEach(c => {
+    c.addEventListener('dragstart', e => { dragId = c.dataset.id; e.dataTransfer.effectAllowed = 'move'; });
+  });
+  document.querySelectorAll('.col').forEach(col => {
+    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('dragover'); });
+    col.addEventListener('dragleave', () => col.classList.remove('dragover'));
+    col.addEventListener('drop', async e => {
+      e.preventDefault(); col.classList.remove('dragover');
+      const l = leads.find(x => x.id === dragId); if (!l) return;
+      const dest = col.dataset.stage;
+      if (dest === l.etapa) return;
+      const patch = { etapa: dest };
+      if (dest === 'fechado') {
+        const v = prompt('Valor do plano fechado (R$):', l.valor_cents ? l.valor_cents/100 : '');
+        if (v === null) return;
+        patch.valor_cents = Math.round((parseFloat(String(v).replace(/\./g, '').replace(',', '.')) || 0) * 100);
+        patch.proxima_acao = null; patch.proxima_acao_em = null;
+      } else if (dest === 'recup') {
+        patch.proxima_acao = 'reengajar (D+1)';
+        patch.proxima_acao_em = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+      }
+      const { error } = await sb.from('leads').update(patch).eq('id', l.id);
+      if (error) { toast('Erro: ' + error.message); return; }
+      await sb.from('eventos').insert({ lead_id: l.id, tipo: 'etapa_movida', detalhe: { de: l.etapa, para: dest } });
+      carregar();
+    });
+  });
+}
+
+// ── Modal (editar / novo) ─────────────────────────────────────────
+const dlg = $('dlg');
+function bindCards() {
+  document.querySelectorAll('.card').forEach(c => c.addEventListener('click', () => abrir(c.dataset.id)));
+}
+async function abrir(id) {
+  const novo = !id;
+  openId = id || null;
+  const l = novo ? {} : leads.find(x => x.id === id);
+  if (!novo && !l) return;
+  $('dNome').textContent = novo ? 'Novo lead' : l.nome;
+  $('dFone').textContent = novo ? 'preencha os dados e salve' : l.telefone + ' · WhatsApp';
+  $('dNomeIn').value = l.nome || '';
+  $('dFoneIn').value = l.telefone || '';
+  $('dUnidade').value = l.unidade || '';
+  $('dInteresse').value = l.interesse || '';
+  $('dOrigem').value = l.origem || '';
+  $('dPotencial').value = l.potencial || '';
+  $('dAcao').value = l.proxima_acao || '';
+  $('dAcaoData').value = l.proxima_acao_em || '';
+  $('dPerder').classList.toggle('hidden', novo);
+  $('dRespondi').classList.toggle('hidden', novo || !l.aguardando_resposta);
+  $('dTlWrap').classList.toggle('hidden', novo);
+  if (!novo) {
+    const { data: msgs } = await sb.from('mensagens').select('*').eq('lead_id', id).order('criada_em');
+    $('dTimeline').innerHTML = (msgs && msgs.length)
+      ? msgs.map(m => {
+          const t = new Date(m.criada_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          return `<div class="msg ${m.direcao}">${esc(m.corpo)}<span class="when">${m.direcao === 'in' ? 'lead' : 'clínica'} · ${t}</span></div>`;
+        }).join('')
+      : '<div class="msg in">— sem mensagens registradas —<span class="when">quando o WhatsApp estiver conectado, a conversa aparece aqui sozinha</span></div>';
+  }
+  dlg.showModal();
+}
+$('btnNovo').addEventListener('click', () => abrir(null));
+$('dSalvar').addEventListener('click', async () => {
+  const rec = {
+    nome: $('dNomeIn').value.trim(),
+    telefone: $('dFoneIn').value.trim(),
+    unidade: $('dUnidade').value || null,
+    interesse: $('dInteresse').value || null,
+    origem: $('dOrigem').value || null,
+    potencial: $('dPotencial').value || null,
+    proxima_acao: $('dAcao').value.trim() || null,
+    proxima_acao_em: $('dAcaoData').value || null,
+  };
+  if (!rec.nome || !rec.telefone) { toast('Nome e telefone são obrigatórios.'); return; }
+  let error;
+  if (openId) ({ error } = await sb.from('leads').update(rec).eq('id', openId));
+  else {
+    rec.aguardando_resposta = true;
+    rec.ultima_msg_lead_at = new Date().toISOString();
+    ({ error } = await sb.from('leads').insert(rec));
+  }
+  if (error) { toast(error.code === '23505' ? 'Já existe um lead ativo com esse telefone.' : 'Erro: ' + error.message); return; }
+  dlg.close(); toast('Salvo ✓'); carregar();
+});
+$('dRespondi').addEventListener('click', async () => {
+  if (!openId) return;
+  await sb.from('leads').update({ aguardando_resposta: false }).eq('id', openId);
+  dlg.close(); toast('Alerta zerado ✓'); carregar();
+});
+$('dPerder').addEventListener('click', async () => {
+  if (!openId) return;
+  const motivo = prompt('Motivo da perda (obrigatório):\npreço · medo · distância · sumiu · concorrente · sem perfil');
+  if (!motivo) { toast('Sem motivo, o lead não pode ser arquivado.'); return; }
+  await sb.from('leads').update({ arquivado: true, motivo_perda: motivo.trim() }).eq('id', openId);
+  await sb.from('eventos').insert({ lead_id: openId, tipo: 'perdido', detalhe: { motivo: motivo.trim() } });
+  dlg.close(); toast('Arquivado com motivo ✓'); carregar();
+});
+
+['fUnidade','fPotencial','fBusca'].forEach(id => $(id).addEventListener('input', render));
+</script>
+</body>
+</html>
