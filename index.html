@@ -156,9 +156,19 @@
       <div><label>Origem</label>
         <select id="dOrigem"><option value="">—</option><option>Instagram</option><option>anúncio</option><option>indicação</option><option>passou na porta</option><option>outro</option></select></div>
       <div><label>Potencial</label>
-        <select id="dPotencial"><option value="">—</option><option value="alto">alto (R$ 3.000+)</option><option value="medio">médio</option><option value="pontual">pontual</option></select></div>
+        <select id="dPotencial"><option value="">—</option><option value="alto">alto (R$ 3.000+)</option><option value="medio">médio</option><option value="pontual">pontual</option><option value="baixissimo">baixíssimo</option></select></div>
+      <div><label>Classificação</label>
+        <select id="dTipo"><option value="novo">novo</option><option value="recorrente">recorrente ★</option></select></div>
       <div><label>Próxima ação</label><input id="dAcao" placeholder="ex.: enviar horários da semana"></div>
       <div><label>Data da próxima ação</label><input id="dAcaoData" type="date"></div>
+    </div>
+    <div id="dComentWrap">
+      <div class="tl-title">COMENTÁRIOS DA EQUIPE</div>
+      <div class="tl" id="dComentarios"></div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <input id="dComentNovo" placeholder="escreva um comentário…" style="flex:1;font:inherit;font-size:13px;color:var(--ink-1);background:var(--page);border:1px solid var(--baseline);border-radius:7px;padding:6px 8px">
+        <button class="btn" id="dComentBtn">＋</button>
+      </div>
     </div>
     <div id="dTlWrap">
       <div class="tl-title">CONVERSA</div>
@@ -166,6 +176,7 @@
     </div>
   </div>
   <div class="m-foot">
+    <button class="btn danger hidden" id="dForaEscopo" title="Arquiva com motivo 'fora de escopo' — usar depois que a Dra. explicou que não fazemos o procedimento">⛔ Encerrar — fora de escopo</button>
     <button class="btn danger" id="dPerder">Marcar como perdido…</button>
     <button class="btn" id="dRespondi" title="Zera o alerta de tempo de resposta">✓ Já respondi no WhatsApp</button>
     <button class="btn primary" id="dSalvar">Salvar</button>
@@ -183,7 +194,8 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = id => document.getElementById(id);
 const STAGES = [
-  { id: 'novo', nome: 'Novo lead' }, { id: 'qual', nome: 'Em qualificação' },
+  { id: 'novo', nome: 'Novo lead' }, { id: 'recor', nome: 'Recorrente ★' },
+  { id: 'qual', nome: 'Em qualificação' },
   { id: 'oferta', nome: 'Avaliação oferecida' }, { id: 'agend', nome: 'Agendado' },
   { id: 'prop', nome: 'Compareceu — proposta' }, { id: 'fechado', nome: 'Fechado ✅' },
   { id: 'recup', nome: 'Recuperação' },
@@ -203,8 +215,9 @@ $('formLogin').addEventListener('submit', async e => {
   if (error) { $('loginErr').textContent = 'E-mail ou senha incorretos.'; return; }
 });
 $('btnSair').addEventListener('click', () => sb.auth.signOut());
+let usuarioAtual = '';
 sb.auth.onAuthStateChange((_ev, session) => {
-  if (session) { $('viewLogin').classList.add('hidden'); $('viewApp').classList.remove('hidden'); $('who').textContent = session.user.email; start(); }
+  if (session) { usuarioAtual = session.user.email; $('viewLogin').classList.add('hidden'); $('viewApp').classList.remove('hidden'); $('who').textContent = session.user.email; start(); }
   else { $('viewApp').classList.add('hidden'); $('viewLogin').classList.remove('hidden'); if (channel) { sb.removeChannel(channel); channel = null; } }
 });
 
@@ -226,7 +239,7 @@ function start() {
 
 // ── Alertas ───────────────────────────────────────────────────────
 function alerta(l) {
-  if (!l.aguardando_resposta || !['novo','qual'].includes(l.etapa) || !l.ultima_msg_lead_at) return null;
+  if (!l.aguardando_resposta || l.etapa === 'fechado' || !l.ultima_msg_lead_at) return null;
   const m = Math.round((Date.now() - new Date(l.ultima_msg_lead_at).getTime()) / 60000);
   if (m >= 60) return { cls: 'crit', txt: '⚠ sem resposta há ' + (m >= 120 ? Math.round(m/60) + ' h' : m + ' min') };
   if (m >= 15) return { cls: 'warn', txt: '⏱ sem resposta há ' + m + ' min' };
@@ -245,7 +258,15 @@ function brl(cents) { return 'R$ ' + (cents/100).toLocaleString('pt-BR', {minimu
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function cardHTML(l) {
   const a = alerta(l);
-  const pot = l.potencial === 'alto' ? '<span class="star">★ alto</span>' : '';
+  let pot = '';
+  if (l.potencial === 'alto') pot = '<span class="star">★ alto</span>';
+  if (l.potencial === 'baixissimo') pot = '<span class="star" style="color:var(--st-critical);border-color:var(--st-critical)">baixíssimo</span>';
+  const tipoChip = l.tipo_cliente === 'recorrente'
+    ? '<span class="chip" style="font-weight:700">★ recorrente</span>'
+    : '<span class="chip">novo</span>';
+  const foraChip = l.fora_escopo
+    ? '<span class="chip" style="color:var(--st-critical);border-color:var(--st-critical);font-weight:700">⛔ fora de escopo</span>'
+    : '';
   let next = '';
   if (l.etapa !== 'fechado') {
     if (!l.proxima_acao) next = '<div class="next missing">⚠ sem próxima ação</div>';
@@ -257,6 +278,7 @@ function cardHTML(l) {
   return `<div class="card" draggable="true" data-id="${l.id}">
     <div class="nm">${esc(l.nome)} ${pot}</div>
     <div class="meta">
+      ${tipoChip}${foraChip}
       ${l.unidade ? `<span class="chip"><span class="dot" style="background:${UNID_COR[l.unidade]}"></span>${esc(l.unidade.split(' ')[0])}</span>` : ''}
       ${l.interesse ? `<span class="chip">${esc(l.interesse)}</span>` : ''}
       ${l.origem ? `<span class="chip">${esc(l.origem)}</span>` : ''}
@@ -344,9 +366,21 @@ async function abrir(id) {
   $('dPotencial').value = l.potencial || '';
   $('dAcao').value = l.proxima_acao || '';
   $('dAcaoData').value = l.proxima_acao_em || '';
+  $('dTipo').value = l.tipo_cliente || 'novo';
   $('dPerder').classList.toggle('hidden', novo);
+  $('dForaEscopo').classList.toggle('hidden', novo || !l.fora_escopo);
   $('dRespondi').classList.toggle('hidden', novo || !l.aguardando_resposta);
   $('dTlWrap').classList.toggle('hidden', novo);
+  $('dComentWrap').classList.toggle('hidden', novo);
+  if (!novo) {
+    const { data: coms } = await sb.from('comentarios').select('*').eq('lead_id', id).order('criado_em');
+    $('dComentarios').innerHTML = (coms && coms.length)
+      ? coms.map(c => {
+          const t = new Date(c.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          return `<div class="msg in" style="max-width:100%">${esc(c.texto)}<span class="when">${esc(c.autor.split('@')[0])} · ${t}</span></div>`;
+        }).join('')
+      : '<div class="msg in" style="max-width:100%;color:var(--ink-muted)">— sem comentários —</div>';
+  }
   if (!novo) {
     const { data: msgs } = await sb.from('mensagens').select('*').eq('lead_id', id).order('criada_em');
     $('dTimeline').innerHTML = (msgs && msgs.length)
@@ -369,6 +403,7 @@ $('dSalvar').addEventListener('click', async () => {
     potencial: $('dPotencial').value || null,
     proxima_acao: $('dAcao').value.trim() || null,
     proxima_acao_em: $('dAcaoData').value || null,
+    tipo_cliente: $('dTipo').value,
   };
   if (!rec.nome || !rec.telefone) { toast('Nome e telefone são obrigatórios.'); return; }
   let error;
@@ -385,6 +420,21 @@ $('dRespondi').addEventListener('click', async () => {
   if (!openId) return;
   await sb.from('leads').update({ aguardando_resposta: false }).eq('id', openId);
   dlg.close(); toast('Alerta zerado ✓'); carregar();
+});
+$('dComentBtn').addEventListener('click', async () => {
+  const texto = $('dComentNovo').value.trim();
+  if (!openId || !texto) return;
+  const { error } = await sb.from('comentarios').insert({ lead_id: openId, autor: usuarioAtual, texto });
+  if (error) { toast('Erro: ' + error.message); return; }
+  $('dComentNovo').value = '';
+  toast('Comentário salvo ✓');
+  abrir(openId);
+});
+$('dForaEscopo').addEventListener('click', async () => {
+  if (!openId) return;
+  await sb.from('leads').update({ arquivado: true, motivo_perda: 'fora de escopo (procedimento não ofertado)' }).eq('id', openId);
+  await sb.from('eventos').insert({ lead_id: openId, tipo: 'encerrado_fora_escopo', detalhe: { por: usuarioAtual } });
+  dlg.close(); toast('Encerrado: fora de escopo ✓'); carregar();
 });
 $('dPerder').addEventListener('click', async () => {
   if (!openId) return;
