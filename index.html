@@ -64,7 +64,9 @@
   .col header .n { font-size: 11px; color: var(--ink-muted); }
   .col .total { font-size: 11px; color: var(--ink-2); padding: 0 4px 6px; }
   .cards { display: flex; flex-direction: column; gap: 7px; min-height: 26px; }
-  .card { background: var(--page); border: 1px solid var(--border); border-radius: 10px; padding: 9px 10px; cursor: grab; box-shadow: var(--card-shadow); }
+  .card { background: var(--page); border: 1px solid var(--border); border-radius: 10px; padding: 9px 10px; cursor: grab; box-shadow: var(--card-shadow); position: relative; }
+  .card-x { position: absolute; top: 5px; right: 6px; border: none; background: none; color: var(--ink-muted); font-size: 11px; line-height: 1; cursor: pointer; padding: 3px 5px; border-radius: 5px; }
+  .card-x:hover { color: #fff; background: var(--st-critical); }
   .card .nm { font-weight: 650; font-size: 13px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .card .nm .star { font-size: 10.5px; color: var(--ink-2); border: 1px solid var(--baseline); border-radius: 5px; padding: 0 4px; }
   .card .meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
@@ -276,7 +278,8 @@ function cardHTML(l) {
     }
   }
   return `<div class="card" draggable="true" data-id="${l.id}">
-    <div class="nm">${esc(l.nome)} ${pot}</div>
+    <button class="card-x" data-x="${l.id}" title="Descartar — não é lead (vendedor, fornecedor, mensagem interna)">✕</button>
+    <div class="nm" style="padding-right:16px">${esc(l.nome)} ${pot}</div>
     <div class="meta">
       ${tipoChip}${foraChip}
       ${l.unidade ? `<span class="chip"><span class="dot" style="background:${UNID_COR[l.unidade]}"></span>${esc(l.unidade.split(' ')[0])}</span>` : ''}
@@ -350,6 +353,14 @@ function bindDnD() {
 const dlg = $('dlg');
 function bindCards() {
   document.querySelectorAll('.card').forEach(c => c.addEventListener('click', () => abrir(c.dataset.id)));
+  document.querySelectorAll('.card-x').forEach(b => b.addEventListener('click', async e => {
+    e.stopPropagation();
+    if (!confirm('Você quer realmente fazer isso? É irreversível.')) return;
+    const id = b.dataset.x;
+    await sb.from('leads').update({ arquivado: true, motivo_perda: 'descartado (não é lead)' }).eq('id', id);
+    await sb.from('eventos').insert({ lead_id: id, tipo: 'descartado', detalhe: { por: usuarioAtual } });
+    toast('Card descartado ✓'); carregar();
+  }));
 }
 async function abrir(id) {
   const novo = !id;
