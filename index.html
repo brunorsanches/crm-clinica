@@ -67,6 +67,8 @@
   .card { background: var(--page); border: 1px solid var(--border); border-radius: 10px; padding: 9px 10px; cursor: grab; box-shadow: var(--card-shadow); position: relative; }
   .card-x { position: absolute; top: 5px; right: 6px; border: none; background: none; color: var(--ink-muted); font-size: 11px; line-height: 1; cursor: pointer; padding: 3px 5px; border-radius: 5px; }
   .card-x:hover { color: #fff; background: var(--st-critical); }
+  .vermais { width: 100%; margin-top: 7px; font-size: 11.5px; color: var(--ink-2); background: var(--surface-1); border: 1px dashed var(--baseline); border-radius: 8px; padding: 6px; cursor: pointer; }
+  .vermais:hover { color: var(--ink-1); border-style: solid; }
   .card .nm { font-weight: 650; font-size: 13px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .card .nm .star { font-size: 10.5px; color: var(--ink-2); border: 1px solid var(--baseline); border-radius: 5px; padding: 0 4px; }
   .card .meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
@@ -206,6 +208,7 @@ const UNID_COR = { 'Lençóis Paulista': 'var(--s1)', 'Macatuba': 'var(--s2)', '
 let leads = [];
 let openId = null;
 let channel = null;
+const mostrar = {}; // quantos cards visíveis por coluna (padrão 10)
 
 function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2400); }
 
@@ -306,14 +309,25 @@ function render() {
   ].map(k => `<div class="kpi"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
 
   $('board').innerHTML = STAGES.map(s => {
-    const ls = leads.filter(l => l.etapa === s.id && passaFiltro(l));
+    let ls = leads.filter(l => l.etapa === s.id && passaFiltro(l));
+    if (s.id === 'agend') {
+      ls = [...ls].sort((a, b) => (a.proxima_acao_em ?? '9999') < (b.proxima_acao_em ?? '9999') ? -1 : 1);
+    }
     const total = ls.reduce((sum, l) => sum + l.valor_cents, 0);
+    const vis = mostrar[s.id] ?? 10;
+    const visiveis = ls.slice(0, vis);
+    const restantes = ls.length - visiveis.length;
     return `<div class="col" data-stage="${s.id}">
       <header><span class="t">${s.nome}</span><span class="n">${ls.length}</span></header>
       ${total ? `<div class="total">${brl(total)}</div>` : ''}
-      <div class="cards">${ls.map(cardHTML).join('')}</div>
+      <div class="cards">${visiveis.map(cardHTML).join('')}</div>
+      ${restantes > 0 ? `<button class="vermais" data-st="${s.id}">ver mais ${restantes} ▾</button>` : ''}
     </div>`;
   }).join('');
+  document.querySelectorAll('.vermais').forEach(b => b.addEventListener('click', () => {
+    mostrar[b.dataset.st] = (mostrar[b.dataset.st] ?? 10) + 10;
+    render();
+  }));
   bindDnD(); bindCards();
 }
 
