@@ -24,6 +24,23 @@
       --good-text: #0ca30c; --card-shadow: none;
     }
   }
+  /* Tema manual (botão 🌙/☀️) — vence a preferência do sistema */
+  html[data-theme="light"] {
+    color-scheme: light;
+    --surface-1: #fcfcfb; --page: #f9f9f7;
+    --ink-1: #0b0b0b; --ink-2: #52514e; --ink-muted: #898781;
+    --grid: #e1e0d9; --baseline: #c3c2b7; --border: rgba(11,11,11,0.10);
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+    --good-text: #006300; --card-shadow: 0 1px 3px rgba(11,11,11,0.07);
+  }
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --page: #0d0d0d;
+    --ink-1: #ffffff; --ink-2: #c3c2b7; --ink-muted: #898781;
+    --grid: #2c2c2a; --baseline: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+    --good-text: #0ca30c; --card-shadow: none;
+  }
   * { box-sizing: border-box; margin: 0; }
   body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page); color: var(--ink-1); font-size: 14px; line-height: 1.45; }
   /* Login */
@@ -128,6 +145,7 @@
     <h1>CRM — Clínica Dra. Letícia Toledo</h1>
     <div class="spacer"></div>
     <span class="who" id="who"></span>
+    <button class="btn ghost" id="btnTema" title="Alternar tema: automático / noturno / claro">🌗</button>
     <button class="btn ghost" id="btnSair">sair</button>
   </header>
   <div class="kpis" id="kpis"></div>
@@ -219,6 +237,25 @@ let channel = null;
 const mostrar = {}; // quantos cards visíveis por coluna (padrão 10)
 
 function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2400); }
+
+// ── Tema (automático / noturno / claro) ───────────────────────────
+const TEMAS = ['auto', 'dark', 'light'];
+const TEMA_ICONE = { auto: '🌗', dark: '🌙', light: '☀️' };
+const TEMA_NOME = { auto: 'automático (segue o aparelho)', dark: 'noturno', light: 'claro' };
+function aplicarTema(t) {
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  $('btnTema').textContent = TEMA_ICONE[t];
+}
+let tema = 'auto';
+try { tema = localStorage.getItem('tema') || 'auto'; } catch {}
+aplicarTema(tema);
+$('btnTema').addEventListener('click', () => {
+  tema = TEMAS[(TEMAS.indexOf(tema) + 1) % TEMAS.length];
+  try { localStorage.setItem('tema', tema); } catch {}
+  aplicarTema(tema);
+  toast('Tema: ' + TEMA_NOME[tema]);
+});
 
 // ── Auth ──────────────────────────────────────────────────────────
 $('formLogin').addEventListener('submit', async e => {
