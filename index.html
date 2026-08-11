@@ -59,7 +59,8 @@
   .board { display: flex; gap: 10px; padding: 4px 20px 24px; overflow-x: auto; align-items: flex-start; }
   .col { min-width: 240px; width: 240px; flex-shrink: 0; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 9px; }
   .col.dragover { outline: 2px dashed var(--s1); outline-offset: -2px; }
-  .col header { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 4px 7px; border-bottom: 1px solid var(--grid); margin-bottom: 7px; }
+  .col header { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 4px 7px; border-bottom: 1px solid var(--grid); margin-bottom: 7px; cursor: grab; }
+  .col header:active { cursor: grabbing; }
   .col header .t { font-size: 12px; font-weight: 700; }
   .col header .n { font-size: 11px; color: var(--ink-muted); }
   .col header .cbtn { border: 0; background: none; cursor: pointer; font-size: 11px; color: var(--ink-muted); padding: 0 2px; opacity: 0; transition: opacity .15s; }
@@ -365,7 +366,7 @@ function render() {
     const restantes = ls.length - visiveis.length;
     const podeApagar = !ETAPAS_SISTEMA.has(s.id);
     return `<div class="col" data-stage="${s.id}">
-      <header><span class="t">${esc(s.nome)}</span>
+      <header draggable="true" title="Arraste pelo título para mudar a coluna de lugar"><span class="t">${esc(s.nome)}</span>
         <span style="white-space:nowrap">
           <button class="cbtn" data-ren="${s.id}" title="Renomear coluna">✎</button>
           ${podeApagar ? `<button class="cbtn" data-del="${s.id}" title="Apagar coluna (só vazia)">🗑</button>` : ''}
@@ -388,15 +389,36 @@ function render() {
 
 // ── Drag & drop ───────────────────────────────────────────────────
 let dragId = null;
+let colDrag = null; // id da coluna sendo arrastada (pelo header)
+async function reordenarColunas(deId, paraId) {
+  if (deId === paraId) return;
+  const ids = STAGES.map(s => s.id);
+  const de = ids.indexOf(deId), para = ids.indexOf(paraId);
+  if (de < 0 || para < 0) return;
+  ids.splice(para, 0, ids.splice(de, 1)[0]);
+  STAGES.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+  STAGES.forEach((s, i) => s.ordem = i + 1);
+  render(); // resposta imediata na tela
+  const rs = await Promise.all(ids.map((id, i) => sb.from('etapas').update({ ordem: i + 1 }).eq('id', id)));
+  if (rs.some(r => r.error)) { toast('Erro ao salvar a ordem.'); carregarEtapas(); return; }
+  toast('Ordem das colunas salva ✓');
+}
 function bindDnD() {
   document.querySelectorAll('.card').forEach(c => {
-    c.addEventListener('dragstart', e => { dragId = c.dataset.id; e.dataTransfer.effectAllowed = 'move'; });
+    c.addEventListener('dragstart', e => { dragId = c.dataset.id; colDrag = null; e.dataTransfer.effectAllowed = 'move'; });
+  });
+  document.querySelectorAll('.col header').forEach(h => {
+    h.addEventListener('dragstart', e => {
+      colDrag = h.closest('.col').dataset.stage; dragId = null;
+      e.dataTransfer.effectAllowed = 'move';
+    });
   });
   document.querySelectorAll('.col').forEach(col => {
     col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('dragover'); });
     col.addEventListener('dragleave', () => col.classList.remove('dragover'));
     col.addEventListener('drop', async e => {
       e.preventDefault(); col.classList.remove('dragover');
+      if (colDrag) { const de = colDrag; colDrag = null; reordenarColunas(de, col.dataset.stage); return; }
       const l = leads.find(x => x.id === dragId); if (!l) return;
       const dest = col.dataset.stage;
       if (dest === l.etapa) return;
