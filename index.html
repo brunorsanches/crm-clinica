@@ -62,6 +62,9 @@
   .col header { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 4px 7px; border-bottom: 1px solid var(--grid); margin-bottom: 7px; }
   .col header .t { font-size: 12px; font-weight: 700; }
   .col header .n { font-size: 11px; color: var(--ink-muted); }
+  .col header .cbtn { border: 0; background: none; cursor: pointer; font-size: 11px; color: var(--ink-muted); padding: 0 2px; opacity: 0; transition: opacity .15s; }
+  .col header:hover .cbtn { opacity: .8; }
+  .col header .cbtn:hover { color: var(--ink-1); }
   .col .total { font-size: 11px; color: var(--ink-2); padding: 0 4px 6px; }
   .cards { display: flex; flex-direction: column; gap: 7px; min-height: 26px; }
   .card { background: var(--page); border: 1px solid var(--border); border-radius: 10px; padding: 9px 10px; cursor: grab; box-shadow: var(--card-shadow); position: relative; }
@@ -138,6 +141,7 @@
     </select>
     <input id="fBusca" type="search" placeholder="Buscar nome ou telefone…">
     <div class="spacer"></div>
+    <button class="btn" id="btnNovaCol" title="Criar nova coluna no funil">＋ Coluna</button>
     <button class="btn primary" id="btnNovo">＋ Novo lead</button>
   </div>
   <div class="board" id="board"></div>
@@ -165,6 +169,7 @@
         <select id="dTipo"><option value="novo">novo</option><option value="recorrente">recorrente ★</option></select></div>
       <div><label>Próxima ação</label><input id="dAcao" placeholder="ex.: enviar horários da semana"></div>
       <div><label>Data da próxima ação</label><input id="dAcaoData" type="date"></div>
+      <div><label>Valor (R$)</label><input id="dValor" placeholder="ex.: 3.500,00" inputmode="decimal"></div>
     </div>
     <div id="dComentWrap">
       <div class="tl-title">COMENTÁRIOS DA EQUIPE</div>
@@ -197,13 +202,15 @@ const SUPABASE_KEY = 'sb_publishable_8mYw5dXj6A2Amh5pTA4k_g_NNTIEWjE';
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = id => document.getElementById(id);
-const STAGES = [
+let STAGES = [
   { id: 'novo', nome: 'Novo lead' }, { id: 'recor', nome: 'Recorrente ★' },
   { id: 'qual', nome: 'Em qualificação' },
   { id: 'oferta', nome: 'Avaliação oferecida' }, { id: 'agend', nome: 'Agendado' },
   { id: 'prop', nome: 'Compareceu — proposta' }, { id: 'fechado', nome: 'Fechado ✅' },
   { id: 'recup', nome: 'Recuperação' },
 ];
+// Etapas de sistema: os robôs (WhatsApp e agenda) dependem delas — dá pra renomear, não apagar
+const ETAPAS_SISTEMA = new Set(['novo', 'recor', 'qual', 'oferta', 'agend', 'prop', 'fechado', 'recup']);
 const UNID_COR = { 'Lençóis Paulista': 'var(--s1)', 'Macatuba': 'var(--s2)', 'Barra Bonita': 'var(--s3)' };
 let leads = [];
 let openId = null;
@@ -232,14 +239,53 @@ async function carregar() {
   if (error) { toast('Erro ao carregar: ' + error.message); return; }
   leads = data; render();
 }
+async function carregarEtapas() {
+  const { data } = await sb.from('etapas').select('*').order('ordem');
+  if (data && data.length) STAGES = data;
+  render();
+}
 function start() {
-  carregar();
+  carregarEtapas().then(carregar);
   if (!channel) {
     channel = sb.channel('leads-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, carregar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'etapas' }, carregarEtapas)
       .subscribe();
   }
   setInterval(render, 60000); // reavalia alertas a cada minuto
+}
+
+// ── Colunas (criar / renomear / apagar) ───────────────────────────
+function slugEtapa(nome) {
+  let s = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24) || 'etapa';
+  while (STAGES.some(e => e.id === s)) s += '2';
+  return s;
+}
+async function novaColuna() {
+  const nome = prompt('Nome da nova coluna:');
+  if (!nome || !nome.trim()) return;
+  const ordem = Math.max(0, ...STAGES.map(e => e.ordem ?? 0)) + 1;
+  const { error } = await sb.from('etapas').insert({ id: slugEtapa(nome), nome: nome.trim(), ordem });
+  if (error) { toast('Erro: ' + error.message); return; }
+  toast('Coluna criada ✓'); carregarEtapas();
+}
+async function renomearColuna(id) {
+  const e = STAGES.find(x => x.id === id); if (!e) return;
+  const nome = prompt('Novo nome da coluna:', e.nome);
+  if (!nome || !nome.trim() || nome.trim() === e.nome) return;
+  const { error } = await sb.from('etapas').update({ nome: nome.trim() }).eq('id', id);
+  if (error) { toast('Erro: ' + error.message); return; }
+  toast('Renomeada ✓'); carregarEtapas();
+}
+async function apagarColuna(id) {
+  const e = STAGES.find(x => x.id === id); if (!e) return;
+  if (ETAPAS_SISTEMA.has(id)) { toast('Essa coluna é do sistema (os robôs usam ela) — dá pra renomear, mas não apagar.'); return; }
+  if (leads.some(l => l.etapa === id)) { toast('Mova ou encerre os cards dessa coluna antes de apagar.'); return; }
+  if (!confirm(`Apagar a coluna "${e.nome}"? É irreversível.`)) return;
+  const { error } = await sb.from('etapas').delete().eq('id', id);
+  if (error) { toast('Erro: ' + error.message); return; }
+  toast('Coluna apagada ✓'); carregarEtapas();
 }
 
 // ── Alertas ───────────────────────────────────────────────────────
@@ -317,8 +363,15 @@ function render() {
     const vis = mostrar[s.id] ?? 10;
     const visiveis = ls.slice(0, vis);
     const restantes = ls.length - visiveis.length;
+    const podeApagar = !ETAPAS_SISTEMA.has(s.id);
     return `<div class="col" data-stage="${s.id}">
-      <header><span class="t">${s.nome}</span><span class="n">${ls.length}</span></header>
+      <header><span class="t">${esc(s.nome)}</span>
+        <span style="white-space:nowrap">
+          <button class="cbtn" data-ren="${s.id}" title="Renomear coluna">✎</button>
+          ${podeApagar ? `<button class="cbtn" data-del="${s.id}" title="Apagar coluna (só vazia)">🗑</button>` : ''}
+          <span class="n">${ls.length}</span>
+        </span>
+      </header>
       ${total ? `<div class="total">${brl(total)}</div>` : ''}
       <div class="cards">${visiveis.map(cardHTML).join('')}</div>
       ${restantes > 0 ? `<button class="vermais" data-st="${s.id}">ver mais ${restantes} ▾</button>` : ''}
@@ -328,6 +381,8 @@ function render() {
     mostrar[b.dataset.st] = (mostrar[b.dataset.st] ?? 10) + 10;
     render();
   }));
+  document.querySelectorAll('[data-ren]').forEach(b => b.addEventListener('click', () => renomearColuna(b.dataset.ren)));
+  document.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => apagarColuna(b.dataset.del)));
   bindDnD(); bindCards();
 }
 
@@ -392,6 +447,7 @@ async function abrir(id) {
   $('dAcao').value = l.proxima_acao || '';
   $('dAcaoData').value = l.proxima_acao_em || '';
   $('dTipo').value = l.tipo_cliente || 'novo';
+  $('dValor').value = l.valor_cents ? (l.valor_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
   $('dPerder').classList.toggle('hidden', novo);
   $('dForaEscopo').classList.toggle('hidden', novo || !l.fora_escopo);
   $('dRespondi').classList.toggle('hidden', novo || !l.aguardando_resposta);
@@ -418,6 +474,7 @@ async function abrir(id) {
   dlg.showModal();
 }
 $('btnNovo').addEventListener('click', () => abrir(null));
+$('btnNovaCol').addEventListener('click', novaColuna);
 $('dSalvar').addEventListener('click', async () => {
   const rec = {
     nome: $('dNomeIn').value.trim(),
@@ -429,6 +486,7 @@ $('dSalvar').addEventListener('click', async () => {
     proxima_acao: $('dAcao').value.trim() || null,
     proxima_acao_em: $('dAcaoData').value || null,
     tipo_cliente: $('dTipo').value,
+    valor_cents: Math.round((parseFloat($('dValor').value.trim().replace(/\./g, '').replace(',', '.')) || 0) * 100),
   };
   if (!rec.nome || !rec.telefone) { toast('Nome e telefone são obrigatórios.'); return; }
   let error;
