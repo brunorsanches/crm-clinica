@@ -162,6 +162,10 @@
       <option value="">Todo potencial</option>
       <option value="alto">Alto (R$ 3.000+)</option><option value="medio">Médio</option><option value="pontual">Pontual</option>
     </select>
+    <select id="fTemp">
+      <option value="">Toda temperatura</option>
+      <option value="quentissimo">🔥🔥 Quentíssimo</option><option value="quente">🔥 Quente</option><option value="morno">🌤 Morno</option><option value="frio">❄️ Frio</option>
+    </select>
     <input id="fBusca" type="search" placeholder="Buscar nome ou telefone…">
     <div class="spacer"></div>
     <button class="btn" id="btnNovaCol" title="Criar nova coluna no funil">＋ Coluna</button>
@@ -188,6 +192,8 @@
         <select id="dOrigem"><option value="">—</option></select></div>
       <div><label>Potencial</label>
         <select id="dPotencial"><option value="">—</option><option value="alto">alto (R$ 3.000+)</option><option value="medio">médio</option><option value="pontual">pontual</option><option value="baixissimo">baixíssimo</option></select></div>
+      <div><label>Temperatura do lead</label>
+        <select id="dTemp"><option value="">—</option><option value="quentissimo">🔥🔥 QUENTÍSSIMO</option><option value="quente">🔥 QUENTE</option><option value="morno">🌤 MORNO</option><option value="frio">❄️ FRIO</option></select></div>
       <div><label>Classificação <button type="button" class="optbtn" data-add="tipo_cliente" title="Criar opção">＋</button><button type="button" class="optbtn" data-rem="tipo_cliente" title="Remover a opção selecionada">−</button></label>
         <select id="dTipo"></select></div>
       <div><label>Coluna do funil</label>
@@ -396,14 +402,21 @@ function alerta(l) {
 
 // ── Render ────────────────────────────────────────────────────────
 function passaFiltro(l) {
-  const u = $('fUnidade').value, p = $('fPotencial').value, q = $('fBusca').value.trim().toLowerCase();
+  const u = $('fUnidade').value, p = $('fPotencial').value, t = $('fTemp').value, q = $('fBusca').value.trim().toLowerCase();
   if (u && l.unidade !== u) return false;
   if (p && l.potencial !== p) return false;
+  if (t && l.temperatura !== t) return false;
   if (q && !((l.nome||'').toLowerCase().includes(q) || (l.telefone||'').includes(q))) return false;
   return true;
 }
 function brl(cents) { return 'R$ ' + (cents/100).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 2}); }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const TEMP_UI = {
+  quentissimo: { txt: '🔥🔥 QUENTÍSSIMO', cor: 'var(--st-critical)' },
+  quente:      { txt: '🔥 QUENTE',        cor: 'var(--s2)' },
+  morno:       { txt: '🌤 MORNO',         cor: '#b98908' },
+  frio:        { txt: '❄️ FRIO',          cor: 'var(--s1)' },
+};
 function cardHTML(l) {
   const a = alerta(l);
   let pot = '';
@@ -427,6 +440,7 @@ function cardHTML(l) {
     <button class="card-x" data-x="${l.id}" title="Descartar — não é lead (vendedor, fornecedor, mensagem interna)">✕</button>
     <div class="nm" style="padding-right:16px">${esc(l.nome)} ${pot}</div>
     <div class="meta">
+      ${l.temperatura && TEMP_UI[l.temperatura] ? `<span class="chip" style="color:${TEMP_UI[l.temperatura].cor};border-color:${TEMP_UI[l.temperatura].cor};font-weight:700">${TEMP_UI[l.temperatura].txt}</span>` : ''}
       ${tipoChip}${foraChip}
       ${l.unidade ? `<span class="chip"><span class="dot" style="background:${UNID_COR[l.unidade]}"></span>${esc(l.unidade.split(' ')[0])}</span>` : ''}
       ${l.interesse ? `<span class="chip">${esc(l.interesse)}</span>` : ''}
@@ -563,6 +577,7 @@ async function abrir(id) {
   popularOpcoes('origem', l.origem || '');
   popularOpcoes('tipo_cliente', l.tipo_cliente || 'novo');
   $('dPotencial').value = l.potencial || '';
+  $('dTemp').value = l.temperatura || '';
   $('dAcao').value = l.proxima_acao || '';
   $('dAcaoData').value = l.proxima_acao_em || '';
   $('dEtapa').innerHTML = STAGES.map(s => `<option value="${s.id}">${esc(s.nome)}</option>`).join('');
@@ -603,6 +618,7 @@ function montarRec() {
     interesse: $('dInteresse').value || null,
     origem: $('dOrigem').value || null,
     potencial: $('dPotencial').value || null,
+    temperatura: $('dTemp').value || null,
     proxima_acao: $('dAcao').value.trim() || null,
     proxima_acao_em: $('dAcaoData').value || null,
     tipo_cliente: $('dTipo').value || 'novo',
@@ -634,7 +650,7 @@ $('dSalvar').addEventListener('click', async () => {
 });
 // Salvamento automático: qualquer campo alterado num card existente já grava na hora
 let tSalvoAuto = null;
-['dNomeIn','dFoneIn','dUnidade','dInteresse','dOrigem','dPotencial','dTipo','dEtapa','dAcao','dAcaoData','dValor'].forEach(id =>
+['dNomeIn','dFoneIn','dUnidade','dInteresse','dOrigem','dPotencial','dTemp','dTipo','dEtapa','dAcao','dAcaoData','dValor'].forEach(id =>
   $(id).addEventListener('change', async () => {
     if (!openId) return;
     if (await salvarLead(false)) {
@@ -673,7 +689,7 @@ $('dPerder').addEventListener('click', async () => {
   dlg.close(); toast('Arquivado com motivo ✓'); carregar();
 });
 
-['fUnidade','fPotencial','fBusca'].forEach(id => $(id).addEventListener('input', render));
+['fUnidade','fPotencial','fTemp','fBusca'].forEach(id => $(id).addEventListener('input', render));
 </script>
 </body>
 </html>
