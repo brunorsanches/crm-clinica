@@ -186,6 +186,8 @@
         <select id="dPotencial"><option value="">—</option><option value="alto">alto (R$ 3.000+)</option><option value="medio">médio</option><option value="pontual">pontual</option><option value="baixissimo">baixíssimo</option></select></div>
       <div><label>Classificação</label>
         <select id="dTipo"><option value="novo">novo</option><option value="recorrente">recorrente ★</option></select></div>
+      <div><label>Coluna do funil</label>
+        <select id="dEtapa" title="Ao salvar, o card vai para a coluna escolhida"></select></div>
       <div><label>Próxima ação</label><input id="dAcao" placeholder="ex.: enviar horários da semana"></div>
       <div><label>Data da próxima ação</label><input id="dAcaoData" type="date"></div>
       <div><label>Valor (R$)</label><input id="dValor" placeholder="ex.: 3.500,00" inputmode="decimal"></div>
@@ -506,6 +508,8 @@ async function abrir(id) {
   $('dAcao').value = l.proxima_acao || '';
   $('dAcaoData').value = l.proxima_acao_em || '';
   $('dTipo').value = l.tipo_cliente || 'novo';
+  $('dEtapa').innerHTML = STAGES.map(s => `<option value="${s.id}">${esc(s.nome)}</option>`).join('');
+  $('dEtapa').value = l.etapa || 'novo';
   $('dValor').value = l.valor_cents ? (l.valor_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
   $('dPerder').classList.toggle('hidden', novo);
   $('dForaEscopo').classList.toggle('hidden', novo || !l.fora_escopo);
@@ -545,9 +549,11 @@ $('dSalvar').addEventListener('click', async () => {
     proxima_acao: $('dAcao').value.trim() || null,
     proxima_acao_em: $('dAcaoData').value || null,
     tipo_cliente: $('dTipo').value,
+    etapa: $('dEtapa').value || 'novo',
     valor_cents: Math.round((parseFloat($('dValor').value.trim().replace(/\./g, '').replace(',', '.')) || 0) * 100),
   };
   if (!rec.nome || !rec.telefone) { toast('Nome e telefone são obrigatórios.'); return; }
+  const anterior = openId ? leads.find(x => x.id === openId) : null;
   let error;
   if (openId) ({ error } = await sb.from('leads').update(rec).eq('id', openId));
   else {
@@ -556,6 +562,9 @@ $('dSalvar').addEventListener('click', async () => {
     ({ error } = await sb.from('leads').insert(rec));
   }
   if (error) { toast(error.code === '23505' ? 'Já existe um lead ativo com esse telefone.' : 'Erro: ' + error.message); return; }
+  if (anterior && anterior.etapa !== rec.etapa) {
+    await sb.from('eventos').insert({ lead_id: openId, tipo: 'etapa_movida', detalhe: { de: anterior.etapa, para: rec.etapa, via: 'ficha' } });
+  }
   dlg.close(); toast('Salvo ✓'); carregar();
 });
 $('dRespondi').addEventListener('click', async () => {
