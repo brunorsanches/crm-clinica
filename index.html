@@ -110,6 +110,10 @@
   .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   @media (max-width: 480px) { .fields { grid-template-columns: 1fr; } }
   .fields label { font-size: 11px; color: var(--ink-2); display: block; margin-bottom: 3px; }
+  .optbtn { border: 1px solid var(--baseline); background: var(--surface-1); color: var(--ink-2); border-radius: 5px; font-size: 10px; line-height: 1; padding: 1px 5px; cursor: pointer; margin-left: 3px; }
+  .optbtn:hover { color: var(--ink-1); border-color: var(--ink-2); }
+  .salvo-auto { font-size: 10.5px; color: var(--good-text); margin-left: 8px; opacity: 0; transition: opacity .3s; }
+  .salvo-auto.show { opacity: 1; }
   .fields select, .fields input { width: 100%; font: inherit; font-size: 13px; color: var(--ink-1); background: var(--page); border: 1px solid var(--baseline); border-radius: 7px; padding: 6px 8px; }
   .tl-title { font-size: 11.5px; font-weight: 700; margin: 15px 0 7px; color: var(--ink-2); }
   .tl { display: flex; flex-direction: column; gap: 6px; }
@@ -178,14 +182,14 @@
       <div><label>Telefone (WhatsApp)</label><input id="dFoneIn" placeholder="(14) 9xxxx-xxxx"></div>
       <div><label>Unidade</label>
         <select id="dUnidade"><option value="">—</option><option>Lençóis Paulista</option><option>Macatuba</option><option>Barra Bonita</option></select></div>
-      <div><label>Interesse</label>
-        <select id="dInteresse"><option value="">—</option><option>colágeno</option><option>full face</option><option>toxina</option><option>preenchimento</option><option>pele</option><option>outro</option></select></div>
-      <div><label>Origem</label>
-        <select id="dOrigem"><option value="">—</option><option>Instagram</option><option>anúncio</option><option>indicação</option><option>passou na porta</option><option>outro</option></select></div>
+      <div><label>Interesse <button type="button" class="optbtn" data-add="interesse" title="Criar opção">＋</button><button type="button" class="optbtn" data-rem="interesse" title="Remover a opção selecionada">−</button></label>
+        <select id="dInteresse"><option value="">—</option></select></div>
+      <div><label>Origem <button type="button" class="optbtn" data-add="origem" title="Criar opção">＋</button><button type="button" class="optbtn" data-rem="origem" title="Remover a opção selecionada">−</button></label>
+        <select id="dOrigem"><option value="">—</option></select></div>
       <div><label>Potencial</label>
         <select id="dPotencial"><option value="">—</option><option value="alto">alto (R$ 3.000+)</option><option value="medio">médio</option><option value="pontual">pontual</option><option value="baixissimo">baixíssimo</option></select></div>
-      <div><label>Classificação</label>
-        <select id="dTipo"><option value="novo">novo</option><option value="recorrente">recorrente ★</option></select></div>
+      <div><label>Classificação <button type="button" class="optbtn" data-add="tipo_cliente" title="Criar opção">＋</button><button type="button" class="optbtn" data-rem="tipo_cliente" title="Remover a opção selecionada">−</button></label>
+        <select id="dTipo"></select></div>
       <div><label>Coluna do funil</label>
         <select id="dEtapa" title="Ao salvar, o card vai para a coluna escolhida"></select></div>
       <div><label>Próxima ação</label><input id="dAcao" placeholder="ex.: enviar horários da semana"></div>
@@ -206,6 +210,7 @@
     </div>
   </div>
   <div class="m-foot">
+    <span class="salvo-auto" id="dSalvoAuto">salvo automaticamente ✓</span>
     <button class="btn danger hidden" id="dForaEscopo" title="Arquiva com motivo 'fora de escopo' — usar depois que a Dra. explicou que não fazemos o procedimento">⛔ Encerrar — fora de escopo</button>
     <button class="btn danger" id="dPerder">Marcar como perdido…</button>
     <button class="btn" id="dRespondi" title="Zera o alerta de tempo de resposta">✓ Já respondi no WhatsApp</button>
@@ -284,7 +289,59 @@ async function carregarEtapas() {
   if (data && data.length) STAGES = data;
   render();
 }
+
+// ── Opções editáveis (Classificação / Origem / Interesse) ─────────
+let OPCOES = {
+  tipo_cliente: ['novo', 'recorrente'],
+  origem: ['Instagram', 'anúncio', 'indicação', 'passou na porta', 'outro'],
+  interesse: ['colágeno', 'full face', 'toxina', 'preenchimento', 'pele', 'outro'],
+};
+const OPCOES_SISTEMA = new Set(['tipo_cliente:novo', 'tipo_cliente:recorrente']); // robôs dependem
+const CAMPO_SEL = { interesse: 'dInteresse', origem: 'dOrigem', tipo_cliente: 'dTipo' };
+async function carregarOpcoes() {
+  const { data } = await sb.from('opcoes').select('*').order('ordem').order('valor');
+  if (data && data.length) {
+    OPCOES = { tipo_cliente: [], origem: [], interesse: [] };
+    data.forEach(o => (OPCOES[o.campo] ??= []).push(o.valor));
+  }
+}
+function popularOpcoes(campo, atual) {
+  const vals = [...(OPCOES[campo] ?? [])];
+  if (atual && !vals.includes(atual)) vals.push(atual); // valor antigo removido da lista continua visível neste card
+  const comVazio = campo !== 'tipo_cliente';
+  $(CAMPO_SEL[campo]).innerHTML = (comVazio ? '<option value="">—</option>' : '') +
+    vals.map(v => `<option value="${esc(v)}">${esc(v)}${campo === 'tipo_cliente' && v === 'recorrente' ? ' ★' : ''}</option>`).join('');
+  $(CAMPO_SEL[campo]).value = atual ?? '';
+}
+document.querySelectorAll('.optbtn').forEach(b => b.addEventListener('click', async e => {
+  e.preventDefault();
+  const campo = b.dataset.add || b.dataset.rem;
+  const sel = $(CAMPO_SEL[campo]);
+  if (b.dataset.add) {
+    const v = prompt('Nova opção:');
+    if (!v || !v.trim()) return;
+    const valor = v.trim();
+    const { error } = await sb.from('opcoes').insert({ campo, valor, ordem: 50 });
+    if (error && !String(error.message).includes('duplicate')) { toast('Erro: ' + error.message); return; }
+    await carregarOpcoes();
+    popularOpcoes(campo, valor);
+    sel.dispatchEvent(new Event('change')); // dispara o salvamento automático
+    toast('Opção criada ✓');
+  } else {
+    const valor = sel.value;
+    if (!valor) { toast('Selecione no campo a opção que quer remover.'); return; }
+    if (OPCOES_SISTEMA.has(campo + ':' + valor)) { toast('Essa opção é do sistema (os robôs usam) — não dá pra remover.'); return; }
+    if (!confirm(`Remover a opção "${valor}" da lista? Cards antigos que já usam continuam mostrando o valor.`)) return;
+    await sb.from('opcoes').delete().eq('campo', campo).eq('valor', valor);
+    await carregarOpcoes();
+    popularOpcoes(campo, campo === 'tipo_cliente' ? 'novo' : '');
+    sel.dispatchEvent(new Event('change'));
+    toast('Opção removida ✓');
+  }
+}));
+
 function start() {
+  carregarOpcoes();
   carregarEtapas().then(carregar);
   if (!channel) {
     channel = sb.channel('leads-rt')
@@ -502,12 +559,12 @@ async function abrir(id) {
   $('dNomeIn').value = l.nome || '';
   $('dFoneIn').value = l.telefone || '';
   $('dUnidade').value = l.unidade || '';
-  $('dInteresse').value = l.interesse || '';
-  $('dOrigem').value = l.origem || '';
+  popularOpcoes('interesse', l.interesse || '');
+  popularOpcoes('origem', l.origem || '');
+  popularOpcoes('tipo_cliente', l.tipo_cliente || 'novo');
   $('dPotencial').value = l.potencial || '';
   $('dAcao').value = l.proxima_acao || '';
   $('dAcaoData').value = l.proxima_acao_em || '';
-  $('dTipo').value = l.tipo_cliente || 'novo';
   $('dEtapa').innerHTML = STAGES.map(s => `<option value="${s.id}">${esc(s.nome)}</option>`).join('');
   $('dEtapa').value = l.etapa || 'novo';
   $('dValor').value = l.valor_cents ? (l.valor_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
@@ -538,8 +595,8 @@ async function abrir(id) {
 }
 $('btnNovo').addEventListener('click', () => abrir(null));
 $('btnNovaCol').addEventListener('click', novaColuna);
-$('dSalvar').addEventListener('click', async () => {
-  const rec = {
+function montarRec() {
+  return {
     nome: $('dNomeIn').value.trim(),
     telefone: $('dFoneIn').value.trim(),
     unidade: $('dUnidade').value || null,
@@ -548,25 +605,45 @@ $('dSalvar').addEventListener('click', async () => {
     potencial: $('dPotencial').value || null,
     proxima_acao: $('dAcao').value.trim() || null,
     proxima_acao_em: $('dAcaoData').value || null,
-    tipo_cliente: $('dTipo').value,
+    tipo_cliente: $('dTipo').value || 'novo',
     etapa: $('dEtapa').value || 'novo',
     valor_cents: Math.round((parseFloat($('dValor').value.trim().replace(/\./g, '').replace(',', '.')) || 0) * 100),
   };
-  if (!rec.nome || !rec.telefone) { toast('Nome e telefone são obrigatórios.'); return; }
+}
+async function salvarLead(fechar) {
+  const rec = montarRec();
+  if (!rec.nome || !rec.telefone) { if (fechar) toast('Nome e telefone são obrigatórios.'); return false; }
   const anterior = openId ? leads.find(x => x.id === openId) : null;
   let error;
   if (openId) ({ error } = await sb.from('leads').update(rec).eq('id', openId));
   else {
+    if (!fechar) return false; // card novo só nasce pelo botão Salvar
     rec.aguardando_resposta = true;
     rec.ultima_msg_lead_at = new Date().toISOString();
     ({ error } = await sb.from('leads').insert(rec));
   }
-  if (error) { toast(error.code === '23505' ? 'Já existe um lead ativo com esse telefone.' : 'Erro: ' + error.message); return; }
+  if (error) { toast(error.code === '23505' ? 'Já existe um lead ativo com esse telefone.' : 'Erro: ' + error.message); return false; }
   if (anterior && anterior.etapa !== rec.etapa) {
     await sb.from('eventos').insert({ lead_id: openId, tipo: 'etapa_movida', detalhe: { de: anterior.etapa, para: rec.etapa, via: 'ficha' } });
   }
-  dlg.close(); toast('Salvo ✓'); carregar();
+  carregar();
+  return true;
+}
+$('dSalvar').addEventListener('click', async () => {
+  if (await salvarLead(true)) { dlg.close(); toast('Salvo ✓'); }
 });
+// Salvamento automático: qualquer campo alterado num card existente já grava na hora
+let tSalvoAuto = null;
+['dNomeIn','dFoneIn','dUnidade','dInteresse','dOrigem','dPotencial','dTipo','dEtapa','dAcao','dAcaoData','dValor'].forEach(id =>
+  $(id).addEventListener('change', async () => {
+    if (!openId) return;
+    if (await salvarLead(false)) {
+      const el = $('dSalvoAuto');
+      el.classList.add('show');
+      clearTimeout(tSalvoAuto);
+      tSalvoAuto = setTimeout(() => el.classList.remove('show'), 1800);
+    }
+  }));
 $('dRespondi').addEventListener('click', async () => {
   if (!openId) return;
   await sb.from('leads').update({ aguardando_resposta: false }).eq('id', openId);
